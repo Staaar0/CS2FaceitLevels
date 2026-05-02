@@ -1,4 +1,4 @@
-name: Build CS2FaceitLevels CSSharp
+name: Build CS2FaceitLevels
 
 on:
   push:
@@ -57,23 +57,7 @@ jobs:
           TAG="cssharp-build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
 
           cat > release-notes.md <<EOF_NOTES
-          Automated CounterStrikeSharp build for CS2FaceitLevels.
-
-          File:
-          - CS2FaceitLevels.zip
-
-          Notes:
-          - This is one managed .NET plugin DLL, so separate Linux/Windows zips are not needed.
-          - Release zip contains only the plugin DLL install path.
-          - The config auto-generates on the server at addons/counterstrikesharp/configs/plugins/CS2FaceitLevels/CS2FaceitLevels.json.
-          - A default config template is kept in the repo at config/CS2FaceitLevels.json.
-          - Requires CounterStrikeSharp installed on the server.
-          - Still requires the CS2FaceitLevels workshop addon through MultiAddonManager for the FACEIT images.
-
-          GitHub also provides:
-          - Source code (zip)
-          - Source code (tar.gz)
-          EOF_NOTES
+          build for CS2FaceitLevels.
 
           gh release create "$TAG" \
             CS2FaceitLevels.zip \
