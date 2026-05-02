@@ -9,15 +9,15 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build CSSharp plugin
+  build-release:
+    name: Build and Release
     runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET 8
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -25,42 +25,29 @@ jobs:
       - name: Restore
         run: dotnet restore CS2FaceitLevels.csproj
 
-      - name: Publish
-        run: dotnet publish CS2FaceitLevels.csproj -c Release -o publish
+      - name: Build
+        run: dotnet build CS2FaceitLevels.csproj -c Release --no-restore
 
-      - name: Create package zip
+      - name: Create package
         run: |
           mkdir -p package/addons/counterstrikesharp/plugins/CS2FaceitLevels
 
-          cp publish/CS2FaceitLevels.dll package/addons/counterstrikesharp/plugins/CS2FaceitLevels/CS2FaceitLevels.dll
+          cp bin/Release/net8.0/CS2FaceitLevels.dll package/addons/counterstrikesharp/plugins/CS2FaceitLevels/
 
-          echo "Package files:"
-          find package -type f | sort
-
-          test -f package/addons/counterstrikesharp/plugins/CS2FaceitLevels/CS2FaceitLevels.dll
-          test ! -f package/addons/counterstrikesharp/configs/plugins/CS2FaceitLevels/CS2FaceitLevels.json
+          if [ -f bin/Release/net8.0/CS2FaceitLevels.pdb ]; then
+            cp bin/Release/net8.0/CS2FaceitLevels.pdb package/addons/counterstrikesharp/plugins/CS2FaceitLevels/
+          fi
 
           cd package
           zip -r ../CS2FaceitLevels.zip addons
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: CS2FaceitLevels
-          path: CS2FaceitLevels.zip
-
       - name: Create GitHub Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="cssharp-build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
-
-          cat > release-notes.md <<EOF_NOTES
-          build for CS2FaceitLevels.
+          TAG="build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
 
           gh release create "$TAG" \
             CS2FaceitLevels.zip \
-            --title "CS2FaceitLevels CSSharp Build #${GITHUB_RUN_NUMBER}" \
-            --notes-file release-notes.md \
-            --target "$GITHUB_SHA"
+            --title "CS2FaceitLevels Build #${GITHUB_RUN_NUMBER}" \
+            --notes ""
