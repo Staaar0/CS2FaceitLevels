@@ -1,0 +1,9 @@
+{
+  "faceit_api_key": "PUT_YOUR_FACEIT_API_KEY_HERE",
+  "debug": false,
+  "cache_minutes": 30,
+  "request_timeout_seconds": 10,
+  "reapply_cached_pin_seconds": 15.0,
+  "clear_pin_when_no_faceit": false,
+  "ConfigVersion": 1
+}
