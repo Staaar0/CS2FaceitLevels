@@ -45,3 +45,6 @@ mm_client_extra_addons			"3718321446"
 mm_extra_addons 				"3718321446,3472082269"
 mm_client_extra_addons			"3718321446,3472082269"
 ```
+## notice
+- for better experience i highly recommended Disabling any plugin that change coins/pins. 
+- CS2FaceitLevels plugin will override them but it will take 15sec to reapply FaceitLevles :)
