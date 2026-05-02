@@ -58,7 +58,6 @@ public sealed class CS2FaceitLevels : BasePlugin, IPluginConfig<CS2FaceitLevelsC
 
     public override void Load(bool hotReload)
     {
-        Logger.LogInformation("[CS2FaceitLevels] Loaded CounterStrikeSharp version.");
 
         RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnectFull);
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
