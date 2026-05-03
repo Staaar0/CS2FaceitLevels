@@ -18,7 +18,7 @@ The plugin does this:
 - [CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp)
 - [MultiAddonManager](https://github.com/Source2ZE/MultiAddonManager)
 - [Faceit API Key](https://developers.faceit.com/apps)
-- [this workshop addon](https://steamcommunity.com/sharedfiles/filedetails/?id=3718321446) [addon ID: 3718321446]
+- [this workshop addon] (there is a bug with workshop addon burst weapons shoot all 3 bullets once)
 
 ## Install on server
 
