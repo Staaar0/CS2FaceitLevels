@@ -18,7 +18,7 @@ The plugin does this:
 - [CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp)
 - [MultiAddonManager](https://github.com/Source2ZE/MultiAddonManager)
 - [Faceit API Key](https://developers.faceit.com/apps)
-- [this workshop addon] (there is a bug with workshop addon burst weapons shoot all 3 bullets once) will be fixed soon
+- [this workshop addon](https://steamcommunity.com/sharedfiles/filedetails/?id=3719547820) [addon ID: 3719547820]
 
 ## Install on server
 
@@ -36,14 +36,14 @@ counterstrikesharp/configs/plugins/CS2FaceitLevels/CS2FaceitLevels.json.
 - MultiAddonManager config path: game\csgo\cfg\multiaddonmanager
 
 ```
-mm_extra_addons 				"3718321446"
-mm_client_extra_addons			"3718321446"
+mm_extra_addons 				"3719547820"
+mm_client_extra_addons			"3719547820"
 ```
 
 - if you want to add multiple addons in MultiAddonManager
 ```
-mm_extra_addons 				"3718321446,3472082269"
-mm_client_extra_addons			"3718321446,3472082269"
+mm_extra_addons 				"3719547820,3472082269"
+mm_client_extra_addons			"3719547820,3472082269"
 ```
 ## notice
 - about the workshop map you do not need to Subscribe manually MultiAddonManager will do everything for you
