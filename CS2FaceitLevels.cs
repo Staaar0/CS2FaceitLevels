@@ -30,16 +30,16 @@ public sealed class CS2FaceitLevels : BasePlugin, IPluginConfig<CS2FaceitLevelsC
 
     private static readonly Dictionary<int, int> FaceitLevelToPin = new()
     {
-        [1] = 1088,
-        [2] = 1087,
-        [3] = 1032,
-        [4] = 1055,
-        [5] = 1041,
-        [6] = 1074,
-        [7] = 1039,
-        [8] = 1067,
-        [9] = 1061,
-        [10] = 1017,
+        [1] = 875,
+        [2] = 876,
+        [3] = 877,
+        [4] = 878,
+        [5] = 879,
+        [6] = 880,
+        [7] = 881,
+        [8] = 882,
+        [9] = 883,
+        [10] = 884,
     };
 
     public void OnConfigParsed(CS2FaceitLevelsConfig config)
