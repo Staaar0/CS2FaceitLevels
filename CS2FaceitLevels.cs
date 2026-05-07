@@ -413,7 +413,7 @@ public sealed class CS2FaceitLevels : BasePlugin, IPluginConfig<CS2FaceitLevelsC
         return false;
     }
 
-    private void ApplyFaceitLevel    private void ApplyFaceitLevel(CCSPlayerController player, int level)
+    private void ApplyFaceitLevel(CCSPlayerController player, int level)
     {
         if (!IsUsablePlayer(player))
             return;
