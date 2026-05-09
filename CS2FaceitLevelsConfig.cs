@@ -31,13 +31,13 @@ public sealed class CS2FaceitLevelsConfig : BasePluginConfig
     public string AllElosChatFormat { get; set; } = "- {PLAYER_COLOR}{PLAYER}{DEFAULT} {LABEL_COLOR}Elo{DEFAULT}: {ELO_COLOR}{ELO}{DEFAULT}";
 
     [JsonPropertyName("missing_player_name_message")]
-    public string MissingPlayerNameMessage { get; set; } = "{red}[CS2FaceitLevels] You need player name {red}< !elo {playername} >";
+    public string MissingPlayerNameMessage { get; set; } = "[{RED}CS2FaceitLevels{default}] You need player name {red}< !elo {playername} >";
 
     [JsonPropertyName("no_player_found_message")]
-    public string NoPlayerFoundMessage { get; set; } = "{red}[CS2FaceitLevels] No player found matching {default}{SEARCH}";
+    public string NoPlayerFoundMessage { get; set; } = "[{RED}CS2FaceitLevels{default}] No player found matching {RED}{SEARCH}";
 
     [JsonPropertyName("multiple_players_found_message")]
-    public string MultiplePlayersFoundMessage { get; set; } = "{red}[CS2FaceitLevels] Multiple players found: {default}{PLAYERS}";
+    public string MultiplePlayersFoundMessage { get; set; } = "[{RED}CS2FaceitLevels{default}] Multiple players found: {RED}{PLAYERS}";
 
     [JsonPropertyName("player_name_color")]
     public string PlayerNameColor { get; set; } = "{RED}";
@@ -55,10 +55,10 @@ public sealed class CS2FaceitLevelsConfig : BasePluginConfig
     public string Level1EloColor { get; set; } = "{GREY}";
 
     [JsonPropertyName("level_2_elo_color")]
-    public string Level2EloColor { get; set; } = "{GREEN}";
+    public string Level2EloColor { get; set; } = "{LIME}";
 
     [JsonPropertyName("level_3_elo_color")]
-    public string Level3EloColor { get; set; } = "{GREEN}";
+    public string Level3EloColor { get; set; } = "{LIME}";
 
     [JsonPropertyName("level_4_elo_color")]
     public string Level4EloColor { get; set; } = "{YELLOW}";
