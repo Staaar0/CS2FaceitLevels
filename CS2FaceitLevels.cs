@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
@@ -16,16 +18,18 @@ public sealed class CS2FaceitLevels : BasePlugin, IPluginConfig<CS2FaceitLevelsC
 {
     public override string ModuleName => "CS2FaceitLevels";
     public override string ModuleAuthor => "✪ Stαr";
-    public override string ModuleVersion => "1.0.2";
+    public override string ModuleVersion => "1.0.3";
     public override string ModuleDescription => "Shows real FACEIT levels in the CS2 scoreboard.";
 
     private static readonly HttpClient Http = new();
+    private static readonly Regex ColorTokenRegex = new("\\{([A-Za-z_]+)\\}", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Lazy<Dictionary<string, string>> ChatColorTokens = new(BuildChatColorTokenMap);
 
     private const int ChallengerBadgeLevel = 11;
     private const int ChallengerRankLimit = 1000;
     private const int ChallengerPinId = 1010;
 
-    private readonly ConcurrentDictionary<ulong, CachedFaceitLevel> _cache = new();
+    private readonly ConcurrentDictionary<ulong, CachedFaceitData> _cache = new();
     private readonly ConcurrentDictionary<ulong, byte> _fetching = new();
 
     private CounterStrikeSharp.API.Modules.Timers.Timer? _reapplyTimer;
@@ -71,6 +75,8 @@ public sealed class CS2FaceitLevels : BasePlugin, IPluginConfig<CS2FaceitLevelsC
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
 
         AddCommand("css_cs2faceitlevels_refresh", "Refresh and reapply FACEIT level pins for all connected players.", OnRefreshCommand);
+        AddCommand("css_elo", "Privately show another player\'s FACEIT ELO by partial name.", OnEloCommand);
+        AddCommand("css_elos", "Privately list all connected players\' FACEIT ELO.", OnElosCommand);
 
         _reapplyTimer = AddTimer(Config.ReapplyCachedPinSeconds, ReapplyCachedPins, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
 
@@ -135,6 +141,99 @@ public sealed class CS2FaceitLevels : BasePlugin, IPluginConfig<CS2FaceitLevelsC
         }
 
         return HookResult.Continue;
+    }
+
+    private void OnEloCommand(CCSPlayerController? caller, CommandInfo command)
+    {
+        if (!IsUsablePlayer(caller))
+        {
+            command.ReplyToCommand("[CS2FaceitLevels] This command is player-only.");
+            return;
+        }
+
+        if (command.ArgCount < 2)
+        {
+            caller!.PrintToChat(ReplaceChatColorTags(Config.MissingPlayerNameMessage));
+            return;
+        }
+
+        var search = GetJoinedArguments(command, 1);
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            caller!.PrintToChat(ReplaceChatColorTags(Config.MissingPlayerNameMessage));
+            return;
+        }
+
+        var matches = Utilities.GetPlayers()
+            .Where(IsUsablePlayer)
+            .Where(p => p.PlayerName.Contains(search, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(p => p.PlayerName)
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            caller!.PrintToChat(ReplaceChatColorTags(Config.NoPlayerFoundMessage.Replace("{SEARCH}", search, StringComparison.OrdinalIgnoreCase)));
+            return;
+        }
+
+        if (matches.Count > 1)
+        {
+            var names = string.Join(", ", matches.Take(5).Select(p => p.PlayerName));
+            caller!.PrintToChat(ReplaceChatColorTags(Config.MultiplePlayersFoundMessage.Replace("{PLAYERS}", names, StringComparison.OrdinalIgnoreCase)));
+            return;
+        }
+
+        var target = PlayerSnapshot.From(matches[0]);
+        var callerSlot = caller!.Slot;
+
+        _ = Task.Run(async () =>
+        {
+            var data = await GetOrFetchFaceitDataAsync(target.SteamId, force: false);
+            Server.NextFrame(() =>
+            {
+                var currentCaller = Utilities.GetPlayerFromSlot(callerSlot);
+                if (!IsUsablePlayer(currentCaller))
+                    return;
+
+                currentCaller!.PrintToChat(RenderEloChatLine(Config.SingleEloChatFormat, target, data));
+            });
+        });
+    }
+
+    private void OnElosCommand(CCSPlayerController? caller, CommandInfo command)
+    {
+        if (!IsUsablePlayer(caller))
+        {
+            command.ReplyToCommand("[CS2FaceitLevels] This command is player-only.");
+            return;
+        }
+
+        var players = Utilities.GetPlayers()
+            .Where(IsUsablePlayer)
+            .OrderBy(p => p.TeamNum)
+            .ThenBy(p => p.PlayerName)
+            .Select(PlayerSnapshot.From)
+            .ToList();
+
+        var callerSlot = caller!.Slot;
+
+        _ = Task.Run(async () =>
+        {
+            var results = await Task.WhenAll(players.Select(async player =>
+                new PlayerFaceitResult(player, await GetOrFetchFaceitDataAsync(player.SteamId, force: false))));
+
+            Server.NextFrame(() =>
+            {
+                var currentCaller = Utilities.GetPlayerFromSlot(callerSlot);
+                if (!IsUsablePlayer(currentCaller))
+                    return;
+
+                foreach (var result in results)
+                {
+                    currentCaller!.PrintToChat(RenderEloChatLine(Config.AllElosChatFormat, result.Player, result.Data));
+                }
+            });
+        });
     }
 
     private void OnRefreshCommand(CCSPlayerController? player, CommandInfo command)
@@ -208,9 +307,10 @@ public sealed class CS2FaceitLevels : BasePlugin, IPluginConfig<CS2FaceitLevelsC
             int? level = null;
             try
             {
-                level = await FetchFaceitLevelAsync(steamId);
+                var data = await FetchFaceitDataAsync(steamId);
+                level = data?.Level;
                 var expires = DateTimeOffset.UtcNow.AddMinutes(Config.CacheMinutes);
-                _cache[steamId] = new CachedFaceitLevel(level, expires);
+                _cache[steamId] = new CachedFaceitData(level, data?.SkillLevel, data?.Elo, expires);
             }
             catch (Exception ex)
             {
@@ -239,7 +339,7 @@ public sealed class CS2FaceitLevels : BasePlugin, IPluginConfig<CS2FaceitLevelsC
         });
     }
 
-    private async Task<int?> FetchFaceitLevelAsync(ulong steamId)
+    private async Task<FaceitPlayerData?> FetchFaceitDataAsync(ulong steamId)
     {
         if (string.IsNullOrWhiteSpace(Config.FaceitApiKey) || Config.FaceitApiKey == "PUT_YOUR_FACEIT_API_KEY_HERE")
         {
@@ -283,21 +383,27 @@ public sealed class CS2FaceitLevels : BasePlugin, IPluginConfig<CS2FaceitLevelsC
         if (!cs2.TryGetProperty("skill_level", out var skillLevelElement))
             return null;
 
-        if (!skillLevelElement.TryGetInt32(out var level))
+        if (!skillLevelElement.TryGetInt32(out var skillLevel))
             return null;
 
-        if (level is < 1 or > 10)
+        if (skillLevel is < 1 or > 10)
             return null;
+
+        int? elo = null;
+        if (cs2.TryGetProperty("faceit_elo", out var eloElement) && eloElement.TryGetInt32(out var eloValue))
+            elo = eloValue;
+
+        var level = skillLevel;
 
         if (level != 10)
-            return level;
+            return new FaceitPlayerData(level, skillLevel, elo);
 
         if (!json.RootElement.TryGetProperty("player_id", out var playerIdElement))
-            return level;
+            return new FaceitPlayerData(level, skillLevel, elo);
 
         var playerId = playerIdElement.GetString();
         if (string.IsNullOrWhiteSpace(playerId))
-            return level;
+            return new FaceitPlayerData(level, skillLevel, elo);
 
         string? region = null;
         if (cs2.TryGetProperty("region", out var regionElement))
@@ -307,11 +413,11 @@ public sealed class CS2FaceitLevels : BasePlugin, IPluginConfig<CS2FaceitLevelsC
         {
             if (Config.Debug)
                 Logger.LogInformation("[CS2FaceitLevels] FACEIT level 10 player {SteamId} has no CS2 region in API response.", steamId);
-            return level;
+            return new FaceitPlayerData(level, skillLevel, elo);
         }
 
         var isChallenger = await IsFaceitChallengerAsync(playerId, region);
-        return isChallenger ? ChallengerBadgeLevel : level;
+        return new FaceitPlayerData(isChallenger ? ChallengerBadgeLevel : level, skillLevel, elo);
     }
 
     private async Task<bool> IsFaceitChallengerAsync(string playerId, string region)
@@ -413,6 +519,109 @@ public sealed class CS2FaceitLevels : BasePlugin, IPluginConfig<CS2FaceitLevelsC
         return false;
     }
 
+    private async Task<CachedFaceitData?> GetOrFetchFaceitDataAsync(ulong steamId, bool force)
+    {
+        if (!force && _cache.TryGetValue(steamId, out var cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+            return cached;
+
+        FaceitPlayerData? data = null;
+        try
+        {
+            data = await FetchFaceitDataAsync(steamId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "[CS2FaceitLevels] FACEIT lookup failed for SteamID {SteamId}.", steamId);
+        }
+
+        var cachedData = new CachedFaceitData(data?.Level, data?.SkillLevel, data?.Elo, DateTimeOffset.UtcNow.AddMinutes(Config.CacheMinutes));
+        _cache[steamId] = cachedData;
+        return cachedData;
+    }
+
+    private string RenderEloChatLine(string template, PlayerSnapshot player, CachedFaceitData? data)
+    {
+        var elo = data?.Elo?.ToString() ?? Config.NoFaceitText;
+        var level = data?.SkillLevel?.ToString() ?? Config.NoFaceitText;
+        var eloColor = GetEloColor(data?.SkillLevel);
+
+        var line = template
+            .Replace("{PLAYER_COLOR}", Config.PlayerNameColor, StringComparison.OrdinalIgnoreCase)
+            .Replace("{LABEL_COLOR}", Config.EloLabelColor, StringComparison.OrdinalIgnoreCase)
+            .Replace("{ELO_COLOR}", eloColor, StringComparison.OrdinalIgnoreCase)
+            .Replace("{PLAYER}", player.PlayerName, StringComparison.OrdinalIgnoreCase)
+            .Replace("{STEAMID64}", player.SteamId.ToString(), StringComparison.OrdinalIgnoreCase)
+            .Replace("{ELO}", elo, StringComparison.OrdinalIgnoreCase)
+            .Replace("{LEVEL}", level, StringComparison.OrdinalIgnoreCase);
+
+        return ReplaceChatColorTags(line);
+    }
+
+    private string GetEloColor(int? skillLevel)
+    {
+        return skillLevel switch
+        {
+            1 => Config.Level1EloColor,
+            2 => Config.Level2EloColor,
+            3 => Config.Level3EloColor,
+            4 => Config.Level4EloColor,
+            5 => Config.Level5EloColor,
+            6 => Config.Level6EloColor,
+            7 => Config.Level7EloColor,
+            8 => Config.Level8EloColor,
+            9 => Config.Level9EloColor,
+            10 => Config.Level10EloColor,
+            _ => Config.NoFaceitColor
+        };
+    }
+
+    private static string ReplaceChatColorTags(string message)
+    {
+        return ColorTokenRegex.Replace(message, match =>
+        {
+            var key = NormalizeColorKey(match.Groups[1].Value);
+            return ChatColorTokens.Value.TryGetValue(key, out var color) ? color : match.Value;
+        });
+    }
+
+    private static Dictionary<string, string> BuildChatColorTokenMap()
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var field in typeof(ChatColors).GetFields(BindingFlags.Public | BindingFlags.Static))
+        {
+            if (field.FieldType != typeof(char))
+                continue;
+
+            var value = ((char)(field.GetValue(null) ?? '\x01')).ToString();
+            map[NormalizeColorKey(field.Name)] = value;
+        }
+
+        if (map.TryGetValue("grey", out var grey))
+            map.TryAdd("gray", grey);
+
+        return map;
+    }
+
+    private static string NormalizeColorKey(string key)
+    {
+        return key.Replace("_", "", StringComparison.Ordinal)
+            .Replace(" ", "", StringComparison.Ordinal)
+            .ToLowerInvariant();
+    }
+
+    private static string GetJoinedArguments(CommandInfo command, int startIndex)
+    {
+        var parts = new List<string>();
+        for (var i = startIndex; i < command.ArgCount; i++)
+        {
+            var part = command.ArgByIndex(i);
+            if (!string.IsNullOrWhiteSpace(part))
+                parts.Add(part);
+        }
+
+        return string.Join(" ", parts).Trim();
+    }
+
     private void ApplyFaceitLevel(CCSPlayerController player, int level)
     {
         if (!IsUsablePlayer(player))
@@ -448,5 +657,11 @@ public sealed class CS2FaceitLevels : BasePlugin, IPluginConfig<CS2FaceitLevelsC
         return player.IsValid && !player.IsBot && player.Connected == PlayerConnectedState.Connected && player.SteamID != 0;
     }
 
-    private sealed record CachedFaceitLevel(int? Level, DateTimeOffset ExpiresAt);
+    private sealed record CachedFaceitData(int? Level, int? SkillLevel, int? Elo, DateTimeOffset ExpiresAt);
+    private sealed record FaceitPlayerData(int? Level, int? SkillLevel, int? Elo);
+    private sealed record PlayerSnapshot(int Slot, ulong SteamId, string PlayerName)
+    {
+        public static PlayerSnapshot From(CCSPlayerController player) => new(player.Slot, player.SteamID, player.PlayerName);
+    }
+    private sealed record PlayerFaceitResult(PlayerSnapshot Player, CachedFaceitData? Data);
 }
